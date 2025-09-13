@@ -280,6 +280,12 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
         }
     }
 
+    @Override
+    public void initNode(String path, Boolean Overwrite, Object object) {
+        addNode(path,Overwrite);
+        getNode(path).get().setValue(object);
+    }
+
     //列表操作
 
     @Override
@@ -335,7 +341,7 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
 
     @Override
     public Object getElement(int index) {
-        if(hasValue() && value instanceof List<?> list) {
+        if (hasValue() && value instanceof List<?> list) {
             return list.get(index);
         }
         return null;

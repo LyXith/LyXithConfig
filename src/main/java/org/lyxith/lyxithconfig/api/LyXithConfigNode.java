@@ -12,6 +12,7 @@ public interface LyXithConfigNode {
     boolean hasValue();
     void setValue(Object value);
     <T> Optional<T> getValue(Class<T> type);
+    void initNode(String path, Boolean Overwrite, Object object);
 
     // 列表操作
     int length();

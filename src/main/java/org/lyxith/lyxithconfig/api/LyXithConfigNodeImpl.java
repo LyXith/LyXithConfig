@@ -44,24 +44,27 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
         JsonObject jsonObject = new JsonObject();
 
         if (hasValue()) {
-            // 如果节点有值，根据节点名称决定序列化方式
-            if (name.isEmpty()) {
-                // 对于匿名节点（如根节点的值），使用空键名
-                switch (value) {
-                    case String s -> jsonObject.addProperty("", s);
-                    case Number number -> jsonObject.addProperty("", number);
-                    case Boolean b -> jsonObject.addProperty("", b);
-                    case null -> jsonObject.add("", JsonNull.INSTANCE);
-                    default -> jsonObject.add("", GSON.toJsonTree(value));
+            // 如果节点有值，直接序列化值到当前对象
+            if (value instanceof List<?> list) {
+                // 处理列表节点
+                for (int i = 0; i < list.size(); i++) {
+                    Object item = list.get(i);
+                    switch (item) {
+                        case String s -> jsonObject.addProperty(String.valueOf(i), s);
+                        case Number number -> jsonObject.addProperty(String.valueOf(i), number);
+                        case Boolean b -> jsonObject.addProperty(String.valueOf(i), b);
+                        case null -> jsonObject.add(String.valueOf(i), JsonNull.INSTANCE);
+                        default -> jsonObject.add(String.valueOf(i), GSON.toJsonTree(item));
+                    }
                 }
             } else {
-                // 对于有名节点，使用节点名称作为键名
+                // 处理单个值节点
                 switch (value) {
-                    case String s -> jsonObject.addProperty(name, s);
-                    case Number number -> jsonObject.addProperty(name, number);
-                    case Boolean b -> jsonObject.addProperty(name, b);
-                    case null -> jsonObject.add(name, JsonNull.INSTANCE);
-                    default -> jsonObject.add(name, GSON.toJsonTree(value));
+                    case String s -> jsonObject.addProperty("0", s);
+                    case Number number -> jsonObject.addProperty("0", number);
+                    case Boolean b -> jsonObject.addProperty("0", b);
+                    case null -> jsonObject.add("0", JsonNull.INSTANCE);
+                    default -> jsonObject.add("0", GSON.toJsonTree(value));
                 }
             }
         } else {
@@ -77,43 +80,61 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
     private static LyXithConfigNodeImpl fromJsonObject(JsonObject jsonObject, LyXithConfigNodeImpl parent, String name) {
         LyXithConfigNodeImpl node = new LyXithConfigNodeImpl(parent, name);
 
-        // 处理空JSON对象 {}
         if (jsonObject == null || jsonObject.entrySet().isEmpty()) {
-            return node; // 返回空的容器节点
+            return node;
         }
 
-        // 检查是否是值节点（包含空键名）
-        boolean hasValue = jsonObject.has("");
+        // 检查是否是值节点：所有键都必须是纯数字
+        boolean isValueNode = true;
+        boolean hasNumericKey = false;
 
-        if (hasValue) {
-            // 处理有值的节点
-            JsonElement valueElement = jsonObject.get("");
-            if (valueElement.isJsonPrimitive()) {
-                // 处理基本数据类型...
-                if (valueElement.getAsJsonPrimitive().isString()) {
-                    node.setValue(valueElement.getAsString());
-                } else if (valueElement.getAsJsonPrimitive().isNumber()) {
-                    String numberStr = valueElement.getAsString();
-                    if (numberStr.contains(".")) {
-                        node.setValue(valueElement.getAsDouble());
-                    } else {
-                        try {
-                            node.setValue(valueElement.getAsInt());
-                        } catch (NumberFormatException e) {
-                            node.setValue(valueElement.getAsLong());
-                        }
-                    }
-                } else if (valueElement.getAsJsonPrimitive().isBoolean()) {
-                    node.setValue(valueElement.getAsBoolean());
-                }
-            } else if (valueElement.isJsonNull()) {
-                node.setValue(null);
+        for (String key : jsonObject.keySet()) {
+            if (key.matches("\\d+")) {
+                hasNumericKey = true;
             } else {
-                // 处理复杂对象或数组
-                node.setValue(GSON.fromJson(valueElement, Object.class));
+                isValueNode = false;
+                break;
             }
+        }
+
+        isValueNode = isValueNode && hasNumericKey;
+
+        if (isValueNode) {
+            // 处理列表节点
+            List<Object> list = new ArrayList<>();
+
+            // 按数字键顺序收集所有值
+            List<String> numericKeys = new ArrayList<>(jsonObject.keySet());
+            numericKeys.sort(Comparator.comparingInt(Integer::parseInt));
+
+            for (String key : numericKeys) {
+                JsonElement valueElement = jsonObject.get(key);
+                if (valueElement.isJsonPrimitive()) {
+                    if (valueElement.getAsJsonPrimitive().isString()) {
+                        list.add(valueElement.getAsString());
+                    } else if (valueElement.getAsJsonPrimitive().isNumber()) {
+                        String numberStr = valueElement.getAsString();
+                        if (numberStr.contains(".")) {
+                            list.add(valueElement.getAsDouble());
+                        } else {
+                            try {
+                                list.add(valueElement.getAsInt());
+                            } catch (NumberFormatException e) {
+                                list.add(valueElement.getAsLong());
+                            }
+                        }
+                    } else if (valueElement.getAsJsonPrimitive().isBoolean()) {
+                        list.add(valueElement.getAsBoolean());
+                    }
+                } else if (valueElement.isJsonNull()) {
+                    list.add(null);
+                } else {
+                    list.add(GSON.fromJson(valueElement, Object.class));
+                }
+            }
+            node.setValue(list);
         } else {
-            // 处理有子节点的节点 - 所有其他键都是子节点
+            // 处理有子节点的节点
             for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
                 if (entry.getValue().isJsonObject()) {
                     LyXithConfigNodeImpl childNode = fromJsonObject(
@@ -190,9 +211,24 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
 
     @Override
     public <T> Optional<T> getValue(Class<T> type) {
+        if (value == null) {
+            return Optional.empty();
+        }
+
+        // 如果是列表，返回第一个元素
+        if (value instanceof List<?> list && !list.isEmpty()) {
+            Object firstElement = list.getFirst();
+            if (type.isInstance(firstElement)) {
+                return Optional.of(type.cast(firstElement));
+            }
+            return Optional.empty();
+        }
+
+        // 如果是单个值
         if (type.isInstance(value)) {
             return Optional.of(type.cast(value));
         }
+
         return Optional.empty();
     }
 
@@ -242,5 +278,66 @@ public class LyXithConfigNodeImpl implements LyXithConfigNode {
         if (!Overwrite && getNode(path).isEmpty()) {
             addNode(path);
         }
+    }
+
+    //列表操作
+
+    @Override
+    public int length() {
+        if (hasValue()) {
+            // 值节点：如果是列表，返回列表大小；如果是单个值，返回1
+            if (value instanceof List<?> list) {
+                return list.size();
+            } else {
+                return 1;
+            }
+        } else {
+            // 容器节点：返回子节点数量
+            return children.size();
+        }
+    }
+
+    @Override
+    public void addElement(Object element) {
+        if (hasValue()) {
+            if (value instanceof List<?>) {
+                // 安全地转换为List<Object>
+                @SuppressWarnings("unchecked")
+                List<Object> list = (List<Object>) value;
+                list.add(element);
+            } else {
+                // 将单个值转换为列表
+                List<Object> newList = new ArrayList<>();
+                newList.add(value);
+                newList.add(element);
+                setValue(newList);
+            }
+        } else {
+            setValue(element);
+        }
+    }
+
+    @Override
+    public void delElement(int index) {
+        if(hasValue() && value instanceof List<?> list) {
+            list.remove(index);
+        }
+    }
+
+    @Override
+    public void setElement(Object element, int index) {
+        if(hasValue() && value instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) value;
+            list.set(index,element);
+        }
+    }
+
+    @Override
+    public Object getElement(int index) {
+        if(hasValue() && value instanceof List<?> list) {
+            return list.get(index);
+        }
+        return null;
     }
 }

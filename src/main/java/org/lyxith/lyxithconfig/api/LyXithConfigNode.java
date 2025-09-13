@@ -13,6 +13,10 @@ public interface LyXithConfigNode {
     void setValue(Object value);
     <T> Optional<T> getValue(Class<T> type);
 
+    // 列表操作
+    int length();
+
+
     // 序列化方法
     String toString();
     LyXithConfigNode fromString(String jsonString);
@@ -56,4 +60,12 @@ public interface LyXithConfigNode {
     LyXithConfigNodeImpl getRoot();
 
     void addNode(String path, Boolean Overwrite);
+
+    void addElement(Object element);
+
+    void delElement(int index);
+
+    void setElement(Object element, int index);
+
+    Object getElement(int index);
 }

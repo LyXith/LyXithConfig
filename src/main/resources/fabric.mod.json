@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "lyxithconfig",
+  "version": "${version}",
+  "name": "LyXithConfig",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/lyxithconfig/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "org.lyxith.lyxithconfig.LyxithConfig"
+    ],
+    "preLaunch": [
+      "org.lyxith.lyxithconfig.LyXithConfigEntryPoint"
+    ],
+    "lyxithconfig-api": [
+      "org.lyxith.lyxithconfig.api.LyXithConfigAPIImpl"
+    ]
+  },
+  "provides": [
+    "lyxithconfig-api"
+  ],
+  "mixins": [
+    "lyxithconfig.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
